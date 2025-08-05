@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 try:
     import joblib
@@ -10,11 +11,11 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.linear_model import LinearRegression
-from clearml import Task, OutputModel
+from clearml import Task, Logger, OutputModel
 import argparse
 
 
-def get_model_params(model_name):
+def get_model_params(model: str) -> dict[str, dict[str, int | float]]:
     cfg = {
         "GradientBoostingRegressor": {
             "n_estimators": 200,
@@ -25,28 +26,58 @@ def get_model_params(model_name):
         "KNeighborsRegressor": {"n_neighbors": 5},
         "LinearRegression": {},
     }
+    return cfg[model]
 
-    return cfg[model_name]
 
-
-def get_model(model_name: str):
+def get_model(
+    model: str,
+) -> GradientBoostingRegressor | KNeighborsRegressor | LinearRegression:
     models = {
         "GradientBoostingRegressor": GradientBoostingRegressor,
         "KNeighborsRegressor": KNeighborsRegressor,
         "LinearRegression": LinearRegression,
     }
 
-    return models[model_name]
+    return models[model]
 
 
-def main(model_name: str):
-    task = Task.init(project_name="uber", reuse_last_task_id=False, output_uri=True, auto_connect_frameworks=False,)
-    task.execute_remotely(queue_name = 'default')
-    logger = task.get_logger()
+# Оценка модели и логирование метрик
+def print_metrics(
+    name: str, y_true: pd.Series, y_pred: np.ndarray, logger: Logger, model: OutputModel
+):
+    logger.report_scalar(
+        name, "RMSE", value=mean_squared_error(y_true, y_pred), iteration=0
+    )
+    logger.report_scalar(
+        name, "MAE", value=mean_absolute_error(y_true, y_pred), iteration=0
+    )
+    logger.report_scalar(name, "R2", value=r2_score(y_true, y_pred), iteration=0)
 
-    # 1. Загрузка и предобработка данных
+    model.report_scalar(
+        name, "RMSE", value=mean_squared_error(y_true, y_pred), iteration=0
+    )
+    model.report_scalar(
+        name, "MAE", value=mean_absolute_error(y_true, y_pred), iteration=0
+    )
+    model.report_scalar(name, "R2", value=r2_score(y_true, y_pred), iteration=0)
+
+
+def main(model: str, queue_name: str):
+    # Подключение ClearML для логирования
+    task: Task = Task.init(
+        project_name="uber", reuse_last_task_id=False, output_uri=True
+    )
+
+    ### ---- Отправляем задачу в очередь ---- ###
+    task.execute_remotely(queue_name = queue_name)
+    logger: Logger = task.get_logger()
+
+    
+
+    # Загрузка и предобработка данных
     df = pd.read_csv("uber.csv")
-    # Логгирование артефакта
+
+    # Логирование артефакта
     task.register_artifact(
         name="uber_fares_dataset",
         artifact=df,
@@ -55,7 +86,7 @@ def main(model_name: str):
         },
     )
 
-    # Удалим пропуски и выбросы
+    # Удаление пропусков и выбросов
     df = df.dropna()
     df = df[
         (df["fare_amount"] > 0)
@@ -77,12 +108,14 @@ def main(model_name: str):
 
     stats = X.describe()
 
+    # Логгирование статистик датасета после обработки как артефакта
     task.register_artifact(
         name="dataset_statistics",
         artifact=stats,
         metadata={"description": "Dataset statistics after post-processing."},
     )
 
+    # Логгирование статистик датасета после обработки как таблицы
     logger.report_table(
         title="Datasets statts", series="Stats", iteration=0, table_plot=stats
     )
@@ -91,54 +124,55 @@ def main(model_name: str):
             "test_size": 0.2,
             "random_state": 42,
         },
-        "model": {"name": model_name, "params": get_model_params(model_name)},
+        "model": {"name": model, "params": get_model_params(model)},
     }
-    # Логгирование параметров
+
+    # Логирование параметров
     task.connect(params)
 
     # Разделение на train/test
     X_train, X_test, y_train, y_test = train_test_split(X, y, **params["data"])
-    # создаем OutputModel модель
+
+    # Создание объекта OutputModel
     output_model = OutputModel(
         task=task,
         framework="ScikitLearn",
-        name=model_name,
-        comment=f"{model_name} for uber",
-        tags=["uber", "lr_model"],
+        name=model,
+        comment=f"{model} for uber",
+        tags=["uber", "reg_model"],
     )
-    # Модель
-    model = get_model(model_name)(**get_model_params(model_name))
-    model.fit(X_train, y_train)
-    joblib.dump(model, f"{model_name}.pkl", compress=True)
-    predicts = model.predict(X_test)
-    output_model.update_weights(f"{model_name}.pkl")
+    reg = get_model(model)(**get_model_params(model))
+    reg.fit(X_train, y_train)
 
-    # Оценка мдели и логирование метрик
-    def print_metrics(name, y_true, y_pred):
-        logger.report_scalar(
-            name, "RMSE", value=mean_squared_error(y_true, y_pred), iteration=0
-        )
-        logger.report_scalar(
-            name, "MAE", value=mean_absolute_error(y_true, y_pred), iteration=0
-        )
-        logger.report_scalar(name, "R2", value=r2_score(y_true, y_pred), iteration=0)
+    # Сохранение модели и тестирование
+    joblib.dump(reg, f"{model}.pkl", compress=True)
+    predicts = reg.predict(X_test)
+    output_model.update_weights(f"{model}.pkl")
 
-    print_metrics(model_name, y_test, predicts)
-    print_metrics(model_name, y_test, predicts)
-    print_metrics(model_name, y_test, predicts)
+    # Вывод метрик
+    print_metrics(model, y_test, predicts, logger, output_model)
+    print_metrics(model, y_test, predicts, logger, output_model)
+    print_metrics(model, y_test, predicts, logger, output_model)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "-m",
-        "--model_name",
+        "--model",
         choices=[
             "GradientBoostingRegressor",
             "KNeighborsRegressor",
             "LinearRegression",
         ],
+        required=True,
+    )
+
+    ### ---- Добавляем имя очереди как параметр ---- ####
+    parser.add_argument(
+        "--queue_name",
         required=True
     )
+
     args = parser.parse_args()
-    main(args.model_name)
+    main(args.model, args.queue_name)
