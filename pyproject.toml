@@ -1,15 +1,13 @@
 [project]
-name = "lesson-04-static-typing"
+name = "lesson-12-sample"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = "~=3.11.0"
 dependencies = [
-    "clearml>=2.0.2",
-    "clearml-session>=0.17.0",
-    "pandas>=1.1.5",
-    "pydantic>=2.5.3",
-    "scikit-learn>=1.0.2",
+    "pandas==2.3.1",
+    "scikit-learn==1.7.1",
+    "numpy==2.3.1"
 ]
 
 [dependency-groups]

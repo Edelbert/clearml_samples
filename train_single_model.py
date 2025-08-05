@@ -170,7 +170,7 @@ if __name__ == "__main__":
 
     ### ---- Добавляем имя очереди как параметр ---- ####
     parser.add_argument(
-        "--queue_name",
+        "--queue-name",
         required=True
     )
 
