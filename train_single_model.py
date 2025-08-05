@@ -156,23 +156,7 @@ def main(model: str, queue_name: str):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "-m",
-        "--model",
-        choices=[
-            "GradientBoostingRegressor",
-            "KNeighborsRegressor",
-            "LinearRegression",
-        ],
-        required=True,
-    )
 
-    ### ---- Добавляем имя очереди как параметр ---- ####
-    parser.add_argument(
-        "--queue-name",
-        required=True
-    )
-
-    args = parser.parse_args()
-    main(args.model, args.queue_name)
+    model_list = ["GradientBoostingRegressor", "KNeighborsRegressor", "LinearRegression"]
+    for model in model_list:
+        main(model, 'default')
