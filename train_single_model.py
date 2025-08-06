@@ -67,6 +67,11 @@ def main(model: str):
     task: Task = Task.init(
         project_name="uber", reuse_last_task_id=False, output_uri=True
     )
+    task.update_parameters({"Args/model": model})
+    task.execute_remotely(queue_name = 'default')
+
+    
+
     logger: Logger = task.get_logger()
     logger.report_text(f'Train {model} model')
 
