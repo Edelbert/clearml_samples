@@ -41,7 +41,7 @@ def get_model(
     return models[model]
 
 
-# 4. Оценка мдели и логирование метрик
+# Оценка модели и логирование метрик
 def print_metrics(
     name: str, y_true: pd.Series, y_pred: np.ndarray, logger: Logger, model: OutputModel
 ):
@@ -68,7 +68,7 @@ def main(model: str):
         project_name="uber", reuse_last_task_id=False, output_uri=True
     )
     logger: Logger = task.get_logger()
-    logger.info(f'Train {model} model')
+    logger.report_text(f'Train {model} model')
 
     # Загрузка и предобработка данных
     df = pd.read_csv("uber.csv")
@@ -123,8 +123,8 @@ def main(model: str):
         "model": {"name": model, "params": get_model_params(model)},
     }
 
-    logger.info('Params')
-    logger.info(params)
+    logger.report_text('Params')
+    logger.report_text(params)
 
     # Логирование параметров
     task.connect(params)
