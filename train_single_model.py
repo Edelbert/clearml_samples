@@ -68,6 +68,7 @@ def main(model: str):
         project_name="uber", reuse_last_task_id=False, output_uri=True
     )
     logger: Logger = task.get_logger()
+    logger.info(f'Train {model} model')
 
     # Загрузка и предобработка данных
     df = pd.read_csv("uber.csv")
@@ -121,6 +122,9 @@ def main(model: str):
         },
         "model": {"name": model, "params": get_model_params(model)},
     }
+
+    logger.info('Params')
+    logger.info(params)
 
     # Логирование параметров
     task.connect(params)
