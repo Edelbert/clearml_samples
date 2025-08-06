@@ -41,7 +41,7 @@ def get_model(
     return models[model]
 
 
-# Оценка модели и логирование метрик
+# 4. Оценка мдели и логирование метрик
 def print_metrics(
     name: str, y_true: pd.Series, y_pred: np.ndarray, logger: Logger, model: OutputModel
 ):
@@ -62,17 +62,12 @@ def print_metrics(
     model.report_scalar(name, "R2", value=r2_score(y_true, y_pred), iteration=0)
 
 
-def main(model: str, queue_name: str):
+def main(model: str):
     # Подключение ClearML для логирования
     task: Task = Task.init(
         project_name="uber", reuse_last_task_id=False, output_uri=True
     )
-
-    ### ---- Отправляем задачу в очередь ---- ###
-    task.execute_remotely(queue_name = queue_name)
     logger: Logger = task.get_logger()
-
-    
 
     # Загрузка и предобработка данных
     df = pd.read_csv("uber.csv")
@@ -156,7 +151,16 @@ def main(model: str, queue_name: str):
 
 
 if __name__ == "__main__":
-
-    model_list = ["GradientBoostingRegressor", "KNeighborsRegressor", "LinearRegression"]
-    for model in model_list:
-        main(model, 'default')
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-m",
+        "--model",
+        choices=[
+            "GradientBoostingRegressor",
+            "KNeighborsRegressor",
+            "LinearRegression",
+        ],
+        required=True,
+    )
+    args = parser.parse_args()
+    main(args.model)
